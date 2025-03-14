@@ -40,6 +40,7 @@ void loop() {
 #define MAX_LAZER_DISTANCE 1000
 
 int global_lazer_disable_pins[MAX_LAZER_COUNT] = {0};
+// int global_lazer_addresses[MAX_LAZER_COUNT] = {0};
 int global_lazer_counter = 0;
 
 class Lazer {
@@ -53,7 +54,7 @@ class Lazer {
       Lazer::address = address;
     }
     void setup() {
-      if (disable_pin==DISABLE_PIN_DEFAULT) {
+      if (Lazer::disable_pin==DISABLE_PIN_DEFAULT) {
         Lazer::enable = lox.begin();
       } 
       else {
@@ -62,7 +63,16 @@ class Lazer {
         delay(20);
         Lazer::enable = lox.begin(Lazer::address);
       }
-      if (!Lazer::enable) Serial.println(F("Failed to boot VL53L0X"));
+      if (!Lazer::enable) {
+        //Serial.println(F("Failed to boot VL53L0X"));
+        Serial.print("Failed to boot VL53L0X: address - ");
+        Serial.print(address);
+        if (disable_pin!=DISABLE_PIN_DEFAULT) {
+          Serial.print(" disable_pin - ");
+          Serial.print(disable_pin);
+        }
+        Serial.println();
+      } 
     }
     int get() {
       VL53L0X_RangingMeasurementData_t measure;
@@ -79,15 +89,31 @@ class Lazer {
     bool enable;
 };
 
-void firstSetupLazers() {
-  for (int i = 0; i<global_lazer_counter; i++) pinMode(global_lazer_disable_pins[i], OUTPUT);
+void firstSetupLazers() { // reset lasers
+  for (int i = 0; i<global_lazer_counter; i++) {
+    if (global_lazer_disable_pins[i]!=DISABLE_PIN_DEFAULT) {
+      pinMode(global_lazer_disable_pins[i], OUTPUT);
+    }
+  }
   // all reset
-  for (int i = 0; i<global_lazer_counter; i++) digitalWrite(global_lazer_disable_pins[i], 0);
+  for (int i = 0; i<global_lazer_counter; i++) {
+    if (global_lazer_disable_pins[i]!=DISABLE_PIN_DEFAULT) {
+      digitalWrite(global_lazer_disable_pins[i], 0);
+    }
+  }
   delay(10);
   // all unreset
-  for (int i = 0; i<global_lazer_counter; i++) digitalWrite(global_lazer_disable_pins[i], 1);
+  for (int i = 0; i<global_lazer_counter; i++) {
+    if (global_lazer_disable_pins[i]!=DISABLE_PIN_DEFAULT) {
+      digitalWrite(global_lazer_disable_pins[i], 1);
+    }
+  }
   delay(10);
   // resetting all
-  for (int i = 0; i<global_lazer_counter; i++) digitalWrite(global_lazer_disable_pins[i], 0);
+  for (int i = 0; i<global_lazer_counter; i++) {
+    if (global_lazer_disable_pins[i]!=DISABLE_PIN_DEFAULT) {
+      digitalWrite(global_lazer_disable_pins[i], 0);
+    }
+  } 
   delay(10);
 }
