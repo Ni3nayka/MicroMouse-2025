@@ -1,4 +1,17 @@
 /*
+  code write for project:
+  https://github.com/Ni3nayka/MicroMouse-2025
+
+  run commands:
+  g++ ExtraMazeSolver.cpp
+  ./a.out
+
+  author: Egor Bakay <egor_bakay@inbox.ru> Ni3nayka
+  write:  March 2025
+  modify: March 2025
+*/
+
+/*
 
 	run commands:
 	g++ ExtraMazeSolver.cpp
@@ -22,6 +35,11 @@ using namespace std;
 #define EXTRA_MAZE_SOLVER_DIR_LEFT 1
 #define EXTRA_MAZE_SOLVER_DIR_RIGHT 3
 
+#define EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE 0
+#define EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD 1
+#define EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT 2
+#define EXTRA_MAZE_SOLVER_NEXT_MOVE_RIGHT 3
+
 struct ExtraMazeSolverCell {
 	int x,y;
 	bool up, down, left, right,visited;
@@ -31,14 +49,21 @@ class ExtraMazeSolver {
 	public:
 		// byte:  up, down, left, right,visited,*,*,* (обратная запись)
 		uint8_t maze[EXTRA_MAZE_SOLVER_SIZE_Y][EXTRA_MAZE_SOLVER_SIZE_X];
-		int x, y, dir;
+		int x, y, dir, x_finish,y_finish;
 		bool warning; // была зафиксирована логическая ошибка
 		void setup() {
 			ExtraMazeSolver::createAllConnection();
 			ExtraMazeSolver::x = 0;
 			ExtraMazeSolver::y = 0;
-			ExtraMazeSolver::dir = EXTRA_MAZE_SOLVER_DIR_LEFT;
+			ExtraMazeSolver::dir = EXTRA_MAZE_SOLVER_DIR_UP;
 			ExtraMazeSolver::warning = 0;
+			ExtraMazeSolver::x_finish = ExtraMazeSolver::x;
+			ExtraMazeSolver::y_finish = ExtraMazeSolver::y;
+			ExtraMazeSolver::x_finish_save = ExtraMazeSolver::x;
+			ExtraMazeSolver::y_finish_save = ExtraMazeSolver::y;
+			ExtraMazeSolver::x_save = ExtraMazeSolver::x;
+			ExtraMazeSolver::y_save = ExtraMazeSolver::y;
+			ExtraMazeSolver::dir_save = ExtraMazeSolver::dir;
 		}
 		// ======================= ARRAY ==============================================================
 		void createAllConnection() {
@@ -228,14 +253,82 @@ class ExtraMazeSolver {
 			ExtraMazeSolver::dir++;
 			ExtraMazeSolver::repairDir();
 		}
-		void robotTurnRight()  {
+		void robotTurnRight() {
 			ExtraMazeSolver::dir--;
 			ExtraMazeSolver::repairDir();
 		}
-		// ======================= DIJKSTRA ===========================================================
-		//bool dijkstra(int x, int y) {}
+		int getNextMove() {
+			if (ExtraMazeSolver::x==ExtraMazeSolver::x_finish && ExtraMazeSolver::y==ExtraMazeSolver::y_finish) {
+				// мы на финише
+				return EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE;
+			}
+			else if (ExtraMazeSolver::x==ExtraMazeSolver::x_save && ExtraMazeSolver::x_finish==ExtraMazeSolver::x_finish_save && 
+				     ExtraMazeSolver::y==ExtraMazeSolver::y_save && ExtraMazeSolver::y_finish==ExtraMazeSolver::y_finish_save &&
+				     ExtraMazeSolver::dir_save==ExtraMazeSolver::dir) {
+				// все ок, маршрут была ранее сгенерирован, мы с него никуда не сходили 
+				// пока тестовая реализация, пока нет деикстры
+				return ExtraMazeSolver::algorytmLeftArm();
+			}
+			else {
+				// Мы как-то изменили маршрут, его надо перегенерировать
+				ExtraMazeSolver::x_save==ExtraMazeSolver::x;
+				ExtraMazeSolver::x_finish_save==ExtraMazeSolver::x_finish;
+				ExtraMazeSolver::y_save==ExtraMazeSolver::y;
+				ExtraMazeSolver::y_finish_save==ExtraMazeSolver::y_finish;
+				ExtraMazeSolver::dir==ExtraMazeSolver::dir_save;
+				// пока тестовая реализация, пока нет деикстры
+				ExtraMazeSolver::next_move_save_for_algorytm_left_arm = EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE;
+				return ExtraMazeSolver::getNextMove();
+			}
+			return EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE; // мало-ли багнет
+		}
 	private:
-		// ======================= PRIVATE ===========================================================
+		int x_finish_save,y_finish_save,x_save,y_save, dir_save;
+		int next_move_save_for_algorytm_left_arm;
+		// ======================= NAVIGATOR ===========================================================
+		void dijkstra() {} // ну мы да....
+		int algorytmLeftArm() {
+			// если было запомнено предыдущее действие
+			if (ExtraMazeSolver::next_move_save_for_algorytm_left_arm!=EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE) {
+				int a = ExtraMazeSolver::next_move_save_for_algorytm_left_arm;
+				ExtraMazeSolver::next_move_save_for_algorytm_left_arm = EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE;
+				return a;
+			}
+			// из памяти берем данные
+			ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(ExtraMazeSolver::x,ExtraMazeSolver::y);
+			// создаем переменные для алгоритма левой руки (1 - можно ехать, 0 - нет)
+			bool forward = 0;
+			bool left = 0;
+			ExtraMazeSolver::repairDir(); // ну мало ли
+			if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_UP) {
+				forward = cell.up;
+				left = cell.left;
+			} 
+			if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_DOWN) {
+				forward = cell.down;
+				left = cell.right;
+			} 
+			if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_LEFT) {
+				forward = cell.left;
+				left = cell.down;
+			} 
+			if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_RIGHT) {
+				forward = cell.right;
+				left = cell.up;
+			} 
+			// алгоритм левой руки
+			if (left) {
+				ExtraMazeSolver::next_move_save_for_algorytm_left_arm = EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD;
+				return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT;
+			}
+			else if (forward) {
+				return EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD;
+			}
+			else {
+				return EXTRA_MAZE_SOLVER_NEXT_MOVE_RIGHT;
+			}
+		}
+		// ======================= ADDITION ===========================================================
 		void repairDir() {
 			// ради оптимальности забиваем на структуру:
 			while (ExtraMazeSolver::dir>3) ExtraMazeSolver::dir -= 3;
