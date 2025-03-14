@@ -1,3 +1,10 @@
+/*
+
+	run commands:
+	g++ ExtraMazeSolver.cpp
+	./a.out
+*/
+
 #define DEBUGER_CPP
 
 #ifdef DEBUGER_CPP
@@ -226,9 +233,7 @@ class ExtraMazeSolver {
 			ExtraMazeSolver::repairDir();
 		}
 		// ======================= DIJKSTRA ===========================================================
-		bool dijkstra(int x, int y) {
-			
-		}
+		//bool dijkstra(int x, int y) {}
 	private:
 		// ======================= PRIVATE ===========================================================
 		void repairDir() {
