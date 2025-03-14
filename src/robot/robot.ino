@@ -21,6 +21,7 @@ Encoder enc2;
 MotorShield motors;
 
 #include "ExtraMazeSolver.h"
+ExtraMazeSolver maze;
 
 #include "lazer.h"
 Lazer lazer_1(LASER_ADDRESS_1, LASER_PIN_1);

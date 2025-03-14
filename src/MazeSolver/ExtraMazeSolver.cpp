@@ -23,6 +23,8 @@
 #ifdef DEBUGER_CPP
 #include <iostream>
 using namespace std;
+#else
+#define string String
 #endif
 
 #define EXTRA_MAZE_SOLVER_SIZE_X 7
@@ -345,6 +347,11 @@ class ExtraMazeSolver {
 							 + " right = " + to_string(cell.right) 
 							 + " visited = " + to_string(cell.visited));	
 		}
+		#ifndef DEBUGER_CPP
+		String to_string(long int a) {
+			return String(a);
+		}
+		#endif
 		void debugPrint(string s="", bool new_line = 1) {
 			if (new_line) s += "\n";
 			#ifdef DEBUGER_CPP
