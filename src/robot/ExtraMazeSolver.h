@@ -40,6 +40,8 @@ using namespace std;
 #define EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT 2
 #define EXTRA_MAZE_SOLVER_NEXT_MOVE_RIGHT 3
 
+#define EXTRA_MAZE_SOLVER_DEFAULT_DISTANCE 250
+
 struct ExtraMazeSolverCell {
 	int x,y;
 	bool up, down, left, right,visited;
@@ -69,7 +71,7 @@ class ExtraMazeSolver {
 		void createAllConnection() {
 			for (int y=0; y<EXTRA_MAZE_SOLVER_SIZE_Y; y++) {
 				for (int x=0; x<EXTRA_MAZE_SOLVER_SIZE_X; x++) {
-					maze[y][x] = 0b00001111;
+					ExtraMazeSolver::maze[y][x] = 0b00001111;
 				}
 			}
 			for (int y = 0; y<EXTRA_MAZE_SOLVER_SIZE_Y; y++) {
@@ -92,7 +94,7 @@ class ExtraMazeSolver {
 		void destroyAllConnection() {
 			for (int y=0; y<EXTRA_MAZE_SOLVER_SIZE_Y; y++) {
 				for (int x=0; x<EXTRA_MAZE_SOLVER_SIZE_X; x++) {
-					maze[y][x] = 0b00000000;
+					ExtraMazeSolver::maze[y][x] = 0b00000000;
 				}
 			}
 		}
@@ -101,7 +103,7 @@ class ExtraMazeSolver {
 			if (EXTRA_MAZE_SOLVER_SIZE_TESTER(x,y)) {
 				cell.x = x;
 				cell.y = y;
-				int data = maze[y][x];
+				int data = ExtraMazeSolver::maze[y][x];
 				cell.up      = (data>>0)&1;
 				cell.down = (data>>1)&1;
 				cell.left     = (data>>2)&1;
@@ -243,15 +245,20 @@ class ExtraMazeSolver {
 			if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_DOWN) y++;	
 			if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_LEFT) x--;	
 			if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_RIGHT) x++;	
-			if (EXTRA_MAZE_SOLVER_SIZE_TESTER(ExtraMazeSolver::x,ExtraMazeSolver::y)) {
+			if (!EXTRA_MAZE_SOLVER_SIZE_TESTER(ExtraMazeSolver::x,ExtraMazeSolver::y)) {
 				ExtraMazeSolver::debugPrint("WARNING: (robotMoveForward) robot left maze: x = " + to_string(ExtraMazeSolver::x) + " y = " + to_string(ExtraMazeSolver::y));
 				ExtraMazeSolver::warning = 1;
 				// тут возможно надо что-то сделать.....но пока алгоритмически не понятно что делать в таком случае
 			}
+			ExtraMazeSolver::x_save = ExtraMazeSolver::x;
+			ExtraMazeSolver::y_save = ExtraMazeSolver::y;
 		}
 		void robotTurnLeft() {
+			// cout << "???" << ExtraMazeSolver::dir << endl;
 			ExtraMazeSolver::dir++;
+			// cout << "???" << ExtraMazeSolver::dir << endl;
 			ExtraMazeSolver::repairDir();
+			// cout << "???" << ExtraMazeSolver::dir << endl;
 		}
 		void robotTurnRight() {
 			ExtraMazeSolver::dir--;
@@ -266,18 +273,18 @@ class ExtraMazeSolver {
 				     ExtraMazeSolver::y==ExtraMazeSolver::y_save && ExtraMazeSolver::y_finish==ExtraMazeSolver::y_finish_save &&
 				     ExtraMazeSolver::dir_save==ExtraMazeSolver::dir) {
 				// все ок, маршрут была ранее сгенерирован, мы с него никуда не сходили 
-				// пока тестовая реализация, пока нет деикстры
-				return ExtraMazeSolver::algorytmLeftArm();
+				// return ExtraMazeSolver::algorytmLeftArm();
+				return ExtraMazeSolver::dijkstraToCoordinate();
 			}
 			else {
 				// Мы как-то изменили маршрут, его надо перегенерировать
-				ExtraMazeSolver::x_save==ExtraMazeSolver::x;
-				ExtraMazeSolver::x_finish_save==ExtraMazeSolver::x_finish;
-				ExtraMazeSolver::y_save==ExtraMazeSolver::y;
-				ExtraMazeSolver::y_finish_save==ExtraMazeSolver::y_finish;
-				ExtraMazeSolver::dir==ExtraMazeSolver::dir_save;
-				// пока тестовая реализация, пока нет деикстры
-				ExtraMazeSolver::next_move_save_for_algorytm_left_arm = EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE;
+				ExtraMazeSolver::x_save = ExtraMazeSolver::x;
+				ExtraMazeSolver::x_finish_save = ExtraMazeSolver::x_finish;
+				ExtraMazeSolver::y_save = ExtraMazeSolver::y;
+				ExtraMazeSolver::y_finish_save = ExtraMazeSolver::y_finish;
+				ExtraMazeSolver::dir_save = ExtraMazeSolver::dir;
+				ExtraMazeSolver::next_move_save_for_algorytm_left_arm = EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE; // для алгоритма левой руки
+				ExtraMazeSolver::dijkstra();
 				return ExtraMazeSolver::getNextMove();
 			}
 			return EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE; // мало-ли багнет
@@ -285,11 +292,133 @@ class ExtraMazeSolver {
 	private:
 		int x_finish_save,y_finish_save,x_save,y_save, dir_save;
 		int next_move_save_for_algorytm_left_arm;
+		uint8_t distanses[EXTRA_MAZE_SOLVER_SIZE_Y][EXTRA_MAZE_SOLVER_SIZE_X];
+		int route[EXTRA_MAZE_SOLVER_SIZE_Y*EXTRA_MAZE_SOLVER_SIZE_X][2]; // [n][x,y]
+		int route_size; // общий размер пути
+		int route_run; // на каком моменте мы от этого пути
 		// ======================= NAVIGATOR ===========================================================
-		void dijkstra() {} // ну мы да....
+		void dijkstra() { 
+			// обнулим дороги
+			for (int y=0; y<EXTRA_MAZE_SOLVER_SIZE_Y; y++) {
+				for (int x=0; x<EXTRA_MAZE_SOLVER_SIZE_X; x++) {
+					ExtraMazeSolver::distanses[y][x] = EXTRA_MAZE_SOLVER_DEFAULT_DISTANCE;
+				}
+			}
+			ExtraMazeSolver::route_run = 0;
+			// там где стоим - длинна дороги 0
+			ExtraMazeSolver::distanses[ExtraMazeSolver::y][ExtraMazeSolver::x] = 0;
+			// сгенерим самые короткие пути во все точки
+			bool was_update = 1;
+			while (was_update) {
+				was_update = 0;
+				for (int y=0; y<EXTRA_MAZE_SOLVER_SIZE_Y; y++) {
+					for (int x=0; x<EXTRA_MAZE_SOLVER_SIZE_X; x++) {
+						ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(x,y);
+						int a = ExtraMazeSolver::distanses[y][x];
+						if (cell.up)    ExtraMazeSolver::distanses[y][x] = min(int(ExtraMazeSolver::distanses[y][x]),ExtraMazeSolver::distanses[y-1][x]+1);
+						if (cell.down)  ExtraMazeSolver::distanses[y][x] = min(int(ExtraMazeSolver::distanses[y][x]),ExtraMazeSolver::distanses[y+1][x]+1);
+						if (cell.left)  ExtraMazeSolver::distanses[y][x] = min(int(ExtraMazeSolver::distanses[y][x]),ExtraMazeSolver::distanses[y][x-1]+1);
+						if (cell.right) ExtraMazeSolver::distanses[y][x] = min(int(ExtraMazeSolver::distanses[y][x]),ExtraMazeSolver::distanses[y][x+1]+1);
+						if (a!=ExtraMazeSolver::distanses[y][x]) was_update = 1;
+					}
+				}
+			}
+			// выведем длины всех дорог
+			// for (int y=0; y<EXTRA_MAZE_SOLVER_SIZE_Y; y++) {
+			// 	for (int x=0; x<EXTRA_MAZE_SOLVER_SIZE_X; x++) {
+			// 		debugPrint(to_string(ExtraMazeSolver::distanses[y][x]),0);
+			// 		debugPrint(" ",0);
+			// 	}
+			// 	debugPrint();
+			// }
+			// генерируем последовательность точек до финиша
+			for (int i=0; i<EXTRA_MAZE_SOLVER_SIZE_Y*EXTRA_MAZE_SOLVER_SIZE_X; i++) { // в целом не нужно, но пофигу
+				ExtraMazeSolver::route[i][0] = 0;
+				ExtraMazeSolver::route[i][1] = 0;
+			}
+			int my_x = ExtraMazeSolver::x_finish, my_y = ExtraMazeSolver::y_finish;
+			int dist = ExtraMazeSolver::distanses[my_x][my_x];
+			if (dist==EXTRA_MAZE_SOLVER_DEFAULT_DISTANCE) return; // т.е. в эту точку дороги нет
+			ExtraMazeSolver::route_size = dist;
+			dist--;
+			ExtraMazeSolver::route[dist][0] = my_x;
+			ExtraMazeSolver::route[dist][1] = my_y;
+			while (dist>0) {
+				ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(my_x,my_y);
+				bool flag = 1;
+				if (cell.up    && flag) if (ExtraMazeSolver::distanses[my_y][my_x]==ExtraMazeSolver::distanses[my_y-1][my_x]+1) { my_y--; flag = 0; }
+				if (cell.down  && flag) if (ExtraMazeSolver::distanses[my_y][my_x]==ExtraMazeSolver::distanses[my_y+1][my_x]+1) { my_y++; flag = 0; }
+				if (cell.left  && flag) if (ExtraMazeSolver::distanses[my_y][my_x]==ExtraMazeSolver::distanses[my_y][my_x-1]+1) { my_x--; flag = 0; }
+				if (cell.right && flag) if (ExtraMazeSolver::distanses[my_y][my_x]==ExtraMazeSolver::distanses[my_y][my_x+1]+1) { my_x++; flag = 0; }
+				dist--;
+				ExtraMazeSolver::route[dist][0] = my_x;
+				ExtraMazeSolver::route[dist][1] = my_y;
+			}
+			// выведем путь
+			// for (int i=0; i<ExtraMazeSolver::route_size; i++) {
+			// 	debugPrint(to_string(ExtraMazeSolver::route[i][0]),0);
+			// 	debugPrint(" ",0);
+			// 	debugPrint(to_string(ExtraMazeSolver::route[i][1]),0);
+			// 	debugPrint();
+			// }
+		}
+		int dijkstraToCoordinate() {
+			int a = ExtraMazeSolver::dijkstraToCoordinateAAA();
+			if (a==EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD) {
+				ExtraMazeSolver::robotMoveForward();
+				ExtraMazeSolver::route_run++;
+			}
+			// cout << "!!!!" << a << endl;
+			// cout << "!!!!!" << EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT << endl;
+			// cout << "!!!!!!" << ExtraMazeSolver::dir << endl;
+			if (a==EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT) ExtraMazeSolver::robotTurnLeft();
+			if (a==EXTRA_MAZE_SOLVER_NEXT_MOVE_RIGHT) ExtraMazeSolver::robotTurnRight();
+			return a;
+		}
+		int dijkstraToCoordinateAAA() {
+			if (ExtraMazeSolver::route_size==ExtraMazeSolver::route_run+1) return EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE;
+			// int my_coo = ExtraMazeSolver::route_size-1;
+			// int next_coo = ExtraMazeSolver::route_size-2;
+			int my_coo = ExtraMazeSolver::route_run;
+			int next_coo = ExtraMazeSolver::route_run+1;
+			// cout << ExtraMazeSolver::route[my_coo][0] << " " << ExtraMazeSolver::route[next_coo][0] << " " << ExtraMazeSolver::route[my_coo][1] << " " << ExtraMazeSolver::route[next_coo][1] << endl;
+			if (ExtraMazeSolver::route[my_coo][0]==ExtraMazeSolver::route[next_coo][0] && 
+				ExtraMazeSolver::route[my_coo][1]==ExtraMazeSolver::route[next_coo][1]+1) {
+					// надо вверх
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_UP) return EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_DOWN) return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_LEFT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_RIGHT; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_RIGHT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT;
+			}
+			if (ExtraMazeSolver::route[my_coo][0]==ExtraMazeSolver::route[next_coo][0] && 
+				ExtraMazeSolver::route[my_coo][1]==ExtraMazeSolver::route[next_coo][1]-1) {
+					// надо вниз
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_UP) return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_DOWN) return EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_LEFT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_RIGHT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_RIGHT;
+			}
+			if (ExtraMazeSolver::route[my_coo][0]==ExtraMazeSolver::route[next_coo][0]+1 && 
+				ExtraMazeSolver::route[my_coo][1]==ExtraMazeSolver::route[next_coo][1]) {
+					// надо влево
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_UP) return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_DOWN) return EXTRA_MAZE_SOLVER_NEXT_MOVE_RIGHT; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_LEFT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_RIGHT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT;
+			}
+			if (ExtraMazeSolver::route[my_coo][0]==ExtraMazeSolver::route[next_coo][0]-1 && 
+				ExtraMazeSolver::route[my_coo][1]==ExtraMazeSolver::route[next_coo][1]) {
+					// надо вправо
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_UP) return EXTRA_MAZE_SOLVER_NEXT_MOVE_RIGHT; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_DOWN) return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_LEFT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT; 
+					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_RIGHT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD;
+			}
+		}
 		int algorytmLeftArm() {
 			// если было запомнено предыдущее действие
 			if (ExtraMazeSolver::next_move_save_for_algorytm_left_arm!=EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE) {
+				ExtraMazeSolver::robotMoveForward();
 				int a = ExtraMazeSolver::next_move_save_for_algorytm_left_arm;
 				ExtraMazeSolver::next_move_save_for_algorytm_left_arm = EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE;
 				return a;
@@ -319,12 +448,15 @@ class ExtraMazeSolver {
 			// алгоритм левой руки
 			if (left) {
 				ExtraMazeSolver::next_move_save_for_algorytm_left_arm = EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD;
+				ExtraMazeSolver::robotTurnLeft();
 				return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT;
 			}
 			else if (forward) {
+				ExtraMazeSolver::robotMoveForward();
 				return EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD;
 			}
 			else {
+				ExtraMazeSolver::robotTurnRight();
 				return EXTRA_MAZE_SOLVER_NEXT_MOVE_RIGHT;
 			}
 		}
@@ -333,6 +465,7 @@ class ExtraMazeSolver {
 			// ради оптимальности забиваем на структуру:
 			while (ExtraMazeSolver::dir>3) ExtraMazeSolver::dir -= 3;
 			while (ExtraMazeSolver::dir<0) ExtraMazeSolver::dir += 3;
+			ExtraMazeSolver::dir_save = ExtraMazeSolver::dir;
 		}
 		void printCell(int x, int y) {
 			ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(x,y);
@@ -345,11 +478,11 @@ class ExtraMazeSolver {
 							 + " right = " + to_string(cell.right) 
 							 + " visited = " + to_string(cell.visited));	
 		}
-    #ifndef DEBUGER_CPP
-    String to_string(long int a) {
-      return String(a);
-    }
-    #endif
+		#ifndef DEBUGER_CPP
+		String to_string(long int a) {
+			return String(a);
+		}
+		#endif
 		void debugPrint(string s="", bool new_line = 1) {
 			if (new_line) s += "\n";
 			#ifdef DEBUGER_CPP
