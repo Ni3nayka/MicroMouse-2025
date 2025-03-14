@@ -21,7 +21,7 @@
 #define LASER_ADDRESS_4 0x33
 #define LASER_ADDRESS_5 0x34
 
-#define ENC1_PIN_1 34
-#define ENC1_PIN_2 35
-#define ENC2_PIN_1 39
-#define ENC2_PIN_2 36
+#define ENC1_PIN_1 35
+#define ENC1_PIN_2 34
+#define ENC2_PIN_1 36
+#define ENC2_PIN_2 39

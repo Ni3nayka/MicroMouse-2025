@@ -9,7 +9,7 @@
 
 #include "pins.h"
 
-// #define ENC_SAVE_MODE
+#define ENC_SAVE_MODE
 #include <arduino_encoder.h>
 Encoder enc1;
 Encoder enc2;
@@ -32,10 +32,17 @@ Lazer lazer_5(LASER_ADDRESS_5, LASER_PIN_5);
 
 #define MOVE_STABILISATION_TIME 200
 #define MOVE_STABILISATION_ENC_POROG 100
-#define MOVE_FORWARD_SPEED 40
-#define MOVE_FORWARD_PID_P 0.01
+#define MOVE_FORWARD_SPEED 20
+#define MOVE_FORWARD_PID_P 0.1 // enc
 #define MOVE_FORWARD_PID_I 0
 #define MOVE_FORWARD_PID_D 0
+
+#define ENC_PARROT_TO_CM 75
+#define ENC_PARROT_TO_ANGLE 10
+
+#define MOVE_FORWARD_LAZER_PID_P 0.01
+#define MOVE_FORWARD_LAZER_PID_I 0
+#define MOVE_FORWARD_LAZER_PID_D 0
 
 void setup() {
   Serial.begin(115200);
@@ -48,6 +55,20 @@ void setup() {
   lazer_5.setup();
   enc1.setup(ENC1_PIN_1, ENC1_PIN_2);  // enc1.reverse();  enc1.get();  enc1.clear();
   enc2.setup(ENC2_PIN_1, ENC2_PIN_2);
+  Main();
+  motors.runs();
+}
+
+void Main() {
+  // forwardEnc(100);
+  forwardLazer(100);
+  // motors.runs(100,100);
+  // delay(1000);
+  // motors.runs();
+  // delay(100);
+  // motors.runs(-100,-100);
+  // delay(1000);
+  // motors.runs();
 }
 
 void loop() {
@@ -56,10 +77,37 @@ void loop() {
   delay(100);
 }
 
+void forwardLazer(long int distance) {
+  distance *= ENC_PARROT_TO_CM;
+  enc1.clear();
+  motors.runs(MOVE_FORWARD_SPEED,MOVE_FORWARD_SPEED);
+  long int e, e_old, p, d, i, pid;
+  while (distance > enc1.get()) {
+    e = lazer_2.get() - lazer_4.get();
+    //e = lazer_1.get() + lazer_2.get() - lazer_4.get() - lazer_5.get();
+    Serial.println(e);
+    // Serial.println(enc1.get());
+    p = e;
+    d = e - e_old;
+    e_old = e;
+    i = i * 0.95 + e;
+    pid = p * MOVE_FORWARD_LAZER_PID_P + i * MOVE_FORWARD_LAZER_PID_I + d * MOVE_FORWARD_LAZER_PID_D;
+    // pid = constrain(pid,MOVE_FORWARD_SPEED,MOVE_FORWARD_SPEED);
+    motors.runs(MOVE_FORWARD_SPEED+pid,MOVE_FORWARD_SPEED-pid);
+  }
+  motors.runs(-50,-50);
+  delay(50);
+  motors.runs();
+}
+
 void forwardEnc(long int distance) {
+  distance *= ENC_PARROT_TO_CM;
+  enc1.clear();
+  enc2.clear();
   long int t = millis() + MOVE_STABILISATION_TIME, e, e_old, p, d, i, pid;
   while (t > millis()) {
-    if (abs(distance - enc1.get()) + abs(distance - enc2.get()) > MOVE_STABILISATION_ENC_POROG) {
+    // if (abs(distance - enc1.get()) + abs(distance - enc2.get()) > MOVE_STABILISATION_ENC_POROG) {
+    if (2*distance - enc1.get() - enc2.get() > 0) {
       t = millis() + MOVE_STABILISATION_TIME;
     }
     e = enc1.get() - enc2.get();
@@ -68,7 +116,13 @@ void forwardEnc(long int distance) {
     e_old = e;
     i = i * 0.95 + e;
     pid = p * MOVE_FORWARD_PID_P + i * MOVE_FORWARD_PID_I + d * MOVE_FORWARD_PID_D;
-    motors.runs(MOVE_FORWARD_SPEED+pid,MOVE_FORWARD_SPEED-pid);
+    // pid = constrain(pid,MOVE_FORWARD_SPEED,MOVE_FORWARD_SPEED);
+    motors.runs(MOVE_FORWARD_SPEED-pid,MOVE_FORWARD_SPEED+pid);
+    // motors.runs(pid,pid);
   }
+  // motors.runs();
+  // delay(100);
+  motors.runs(-50,-50);
+  delay(50);
   motors.runs();
 }
