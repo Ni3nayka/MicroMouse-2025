@@ -25,8 +25,8 @@ using namespace std;
 #define string String
 #endif
 
-#define EXTRA_MAZE_SOLVER_SIZE_X 7
-#define EXTRA_MAZE_SOLVER_SIZE_Y 5 
+#define EXTRA_MAZE_SOLVER_SIZE_X 6
+#define EXTRA_MAZE_SOLVER_SIZE_Y 6 
 
 #define EXTRA_MAZE_SOLVER_SIZE_TESTER(x,y) (x>=0 && x<EXTRA_MAZE_SOLVER_SIZE_X && y>=0 && y<EXTRA_MAZE_SOLVER_SIZE_Y)
 
@@ -66,6 +66,7 @@ class ExtraMazeSolver {
 			ExtraMazeSolver::x_save = ExtraMazeSolver::x;
 			ExtraMazeSolver::y_save = ExtraMazeSolver::y;
 			ExtraMazeSolver::dir_save = ExtraMazeSolver::dir;
+      ExtraMazeSolver::count_visited_cell = 0;
 		}
 		// ======================= ARRAY ==============================================================
 		void createAllConnection() {
@@ -158,7 +159,7 @@ class ExtraMazeSolver {
 			} 	
 		}	
 		// ======================= MOVE ==============================================================
-		void exploreCell(bool up /* forward */, bool down /* backward */, bool left, bool right, int x = -1, int y = -1, int dir = -1) {
+		void exploreCell(bool up /* forward */, bool down /* backward */, bool left, bool right, int x = -1, int y = -1, int dir = -1, bool no_backward = 0) {
 			// по дефолту - подтягиваем из памяти координату и направление
 			if (x==-1 && y==-1) {
 				x = ExtraMazeSolver::x;
@@ -179,6 +180,11 @@ class ExtraMazeSolver {
 				ExtraMazeSolver::warning = 1;
 				return;
 			}
+      // если были в этой координате, то не анализируем
+      {
+        ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(ExtraMazeSolver::x,ExtraMazeSolver::y); 
+        if (cell.visited) return;
+      }
 			// вращаем робота в связи с его направлением
 			{
 				int up_save = up, down_save = down, left_save = left, right_save = right;
@@ -204,6 +210,7 @@ class ExtraMazeSolver {
 			}
 			// убираем невозможные связи в связи с границами лабиринта
 			if (ExtraMazeSolver::y<=0 && up==1) {
+
 				ExtraMazeSolver::debugPrint("WARNING: from this coordinate robot can't move up: x = " + to_string(ExtraMazeSolver::x) + " y = " + to_string(ExtraMazeSolver::y));
 				ExtraMazeSolver::warning = 1;
 				up = 0;
@@ -265,14 +272,26 @@ class ExtraMazeSolver {
 			ExtraMazeSolver::repairDir();
 		}
 		int getNextMove() {
+      int visited_cell = 0;
+      // Serial.println("1");
+      for (int y=0; y<EXTRA_MAZE_SOLVER_SIZE_Y; y++) {
+				for (int x=0; x<EXTRA_MAZE_SOLVER_SIZE_X; x++) {
+          ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(x,y);
+          visited_cell += int(cell.visited);
+				}
+			}
+      // Serial.println("2");
+      
 			if (ExtraMazeSolver::x==ExtraMazeSolver::x_finish && ExtraMazeSolver::y==ExtraMazeSolver::y_finish) {
 				// мы на финише
 				return EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE;
 			}
 			else if (ExtraMazeSolver::x==ExtraMazeSolver::x_save && ExtraMazeSolver::x_finish==ExtraMazeSolver::x_finish_save && 
 				     ExtraMazeSolver::y==ExtraMazeSolver::y_save && ExtraMazeSolver::y_finish==ExtraMazeSolver::y_finish_save &&
-				     ExtraMazeSolver::dir_save==ExtraMazeSolver::dir) {
+				     ExtraMazeSolver::dir_save==ExtraMazeSolver::dir && ExtraMazeSolver::count_visited_cell==visited_cell) {
 				// все ок, маршрут была ранее сгенерирован, мы с него никуда не сходили 
+
+        // Serial.println("3");
 				// return ExtraMazeSolver::algorytmLeftArm();
 				return ExtraMazeSolver::dijkstraToCoordinate();
 			}
@@ -284,6 +303,8 @@ class ExtraMazeSolver {
 				ExtraMazeSolver::y_finish_save = ExtraMazeSolver::y_finish;
 				ExtraMazeSolver::dir_save = ExtraMazeSolver::dir;
 				ExtraMazeSolver::next_move_save_for_algorytm_left_arm = EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE; // для алгоритма левой руки
+        ExtraMazeSolver::count_visited_cell = visited_cell;
+        // Serial.println("4");
 				ExtraMazeSolver::dijkstra();
 				return ExtraMazeSolver::getNextMove();
 			}
@@ -296,6 +317,7 @@ class ExtraMazeSolver {
 		int route[EXTRA_MAZE_SOLVER_SIZE_Y*EXTRA_MAZE_SOLVER_SIZE_X][2]; // [n][x,y]
 		int route_size; // общий размер пути
 		int route_run; // на каком моменте мы от этого пути
+    int count_visited_cell;
 		// ======================= NAVIGATOR ===========================================================
 		void dijkstra() { 
 			// обнулим дороги
@@ -339,8 +361,8 @@ class ExtraMazeSolver {
 			int my_x = ExtraMazeSolver::x_finish, my_y = ExtraMazeSolver::y_finish;
 			int dist = ExtraMazeSolver::distanses[my_x][my_x];
 			if (dist==EXTRA_MAZE_SOLVER_DEFAULT_DISTANCE) return; // т.е. в эту точку дороги нет
-			ExtraMazeSolver::route_size = dist;
-			dist--;
+			ExtraMazeSolver::route_size = dist+1;
+			// dist
 			ExtraMazeSolver::route[dist][0] = my_x;
 			ExtraMazeSolver::route[dist][1] = my_y;
 			while (dist>0) {
@@ -355,12 +377,12 @@ class ExtraMazeSolver {
 				ExtraMazeSolver::route[dist][1] = my_y;
 			}
 			// выведем путь
-			// for (int i=0; i<ExtraMazeSolver::route_size; i++) {
-			// 	debugPrint(to_string(ExtraMazeSolver::route[i][0]),0);
-			// 	debugPrint(" ",0);
-			// 	debugPrint(to_string(ExtraMazeSolver::route[i][1]),0);
-			// 	debugPrint();
-			// }
+			for (int i=0; i<ExtraMazeSolver::route_size; i++) {
+				debugPrint(to_string(ExtraMazeSolver::route[i][0]),0);
+				debugPrint(" ",0);
+				debugPrint(to_string(ExtraMazeSolver::route[i][1]),0);
+				debugPrint();
+			}
 		}
 		int dijkstraToCoordinate() {
 			int a = ExtraMazeSolver::dijkstraToCoordinateAAA();
