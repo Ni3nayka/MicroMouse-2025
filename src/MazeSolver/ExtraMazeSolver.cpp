@@ -54,12 +54,14 @@ class ExtraMazeSolver {
 		uint8_t maze[EXTRA_MAZE_SOLVER_SIZE_Y][EXTRA_MAZE_SOLVER_SIZE_X];
 		int x, y, dir, x_finish,y_finish;
 		bool warning; // была зафиксирована логическая ошибка
+		bool error_maze_analyzing; // была зафиксирована ошибка при анализе лабиринта - продолжение работы не имеет смысла
 		void setup() {
 			ExtraMazeSolver::createAllConnection();
 			ExtraMazeSolver::x = 0;
 			ExtraMazeSolver::y = 0;
 			ExtraMazeSolver::dir = EXTRA_MAZE_SOLVER_DIR_UP;
 			ExtraMazeSolver::warning = 0;
+			ExtraMazeSolver::error_maze_analyzing = 0;
 			ExtraMazeSolver::x_finish = ExtraMazeSolver::x;
 			ExtraMazeSolver::y_finish = ExtraMazeSolver::y;
 			ExtraMazeSolver::x_finish_save = ExtraMazeSolver::x;
@@ -181,11 +183,11 @@ class ExtraMazeSolver {
 				ExtraMazeSolver::warning = 1;
 				return;
 			}
-      // если были в этой координате, то не анализируем
-      {
-        ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(ExtraMazeSolver::x,ExtraMazeSolver::y); 
-        if (cell.visited) return;
-      }
+			// если были в этой координате, то не анализируем
+			{
+				ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(ExtraMazeSolver::x,ExtraMazeSolver::y); 
+				if (cell.visited) return;
+			}
 			// вращаем робота в связи с его направлением
 			{
 				int up_save = up, down_save = down, left_save = left, right_save = right;
@@ -232,20 +234,26 @@ class ExtraMazeSolver {
 				right = 0;
 			}
 			// заносим проверенные данные в память
-			ExtraMazeSolverCell cell{x,y,up,down,left,right,1};
-			ExtraMazeSolver::writeCell(cell);
+			ExtraMazeSolverCell cell;
 			cell = ExtraMazeSolver::getCell(x,y-1);
+			if (cell.visited && cell.down!=up) ExtraMazeSolver::debugPrintWithErrorMazeAnalyzing(up,down,left,right);
 			cell.down = up;
 			ExtraMazeSolver::writeCell(cell,0);
 			cell = ExtraMazeSolver::getCell(x,y+1);
+			if (cell.visited && cell.up!=down) ExtraMazeSolver::debugPrintWithErrorMazeAnalyzing(up,down,left,right);
 			cell.up = down;
 			ExtraMazeSolver::writeCell(cell,0);
 			cell = ExtraMazeSolver::getCell(x-1,y);
+			if (cell.visited && cell.right!=left) ExtraMazeSolver::debugPrintWithErrorMazeAnalyzing(up,down,left,right);
 			cell.right = left;
 			ExtraMazeSolver::writeCell(cell,0);
 			cell = ExtraMazeSolver::getCell(x+1,y);
+			if (cell.visited && cell.left!=right) ExtraMazeSolver::debugPrintWithErrorMazeAnalyzing(up,down,left,right);
 			cell.left = right;
 			ExtraMazeSolver::writeCell(cell,0);
+			// обновляем нашу координату
+			cell = ExtraMazeSolverCell{x,y,up,down,left,right,1};
+			ExtraMazeSolver::writeCell(cell);
 		}
 		void robotMoveForward() {
 			ExtraMazeSolver::repairDir();
@@ -273,26 +281,24 @@ class ExtraMazeSolver {
 			ExtraMazeSolver::repairDir();
 		}
 		int getNextMove() {
-      int visited_cell = 0;
-      // Serial.println("1");
-      for (int y=0; y<EXTRA_MAZE_SOLVER_SIZE_Y; y++) {
+			if (ExtraMazeSolver::error_maze_analyzing) { // если при анализе лабиринта была найдена ошибка - далее не двигаемся
+				return EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE;
+			}
+			int visited_cell = 0;
+			for (int y=0; y<EXTRA_MAZE_SOLVER_SIZE_Y; y++) {
 				for (int x=0; x<EXTRA_MAZE_SOLVER_SIZE_X; x++) {
-          ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(x,y);
-          visited_cell += int(cell.visited);
+					ExtraMazeSolverCell cell = ExtraMazeSolver::getCell(x,y);
+					visited_cell += int(cell.visited);
 				}
 			}
-      // Serial.println("2");
-      
 			if (ExtraMazeSolver::x==ExtraMazeSolver::x_finish && ExtraMazeSolver::y==ExtraMazeSolver::y_finish) {
 				// мы на финише
 				return EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE;
 			}
 			else if (ExtraMazeSolver::x==ExtraMazeSolver::x_save && ExtraMazeSolver::x_finish==ExtraMazeSolver::x_finish_save && 
-				     ExtraMazeSolver::y==ExtraMazeSolver::y_save && ExtraMazeSolver::y_finish==ExtraMazeSolver::y_finish_save &&
-				     ExtraMazeSolver::dir_save==ExtraMazeSolver::dir && ExtraMazeSolver::count_visited_cell==visited_cell) {
+					ExtraMazeSolver::y==ExtraMazeSolver::y_save && ExtraMazeSolver::y_finish==ExtraMazeSolver::y_finish_save &&
+					ExtraMazeSolver::dir_save==ExtraMazeSolver::dir && ExtraMazeSolver::count_visited_cell==visited_cell) {
 				// все ок, маршрут была ранее сгенерирован, мы с него никуда не сходили 
-
-        // Serial.println("3");
 				// return ExtraMazeSolver::algorytmLeftArm();
 				return ExtraMazeSolver::dijkstraToCoordinate();
 			}
@@ -304,8 +310,7 @@ class ExtraMazeSolver {
 				ExtraMazeSolver::y_finish_save = ExtraMazeSolver::y_finish;
 				ExtraMazeSolver::dir_save = ExtraMazeSolver::dir;
 				ExtraMazeSolver::next_move_save_for_algorytm_left_arm = EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE; // для алгоритма левой руки
-        ExtraMazeSolver::count_visited_cell = visited_cell;
-        // Serial.println("4");
+				ExtraMazeSolver::count_visited_cell = visited_cell;
 				ExtraMazeSolver::dijkstra();
 				return ExtraMazeSolver::getNextMove();
 			}
@@ -318,7 +323,7 @@ class ExtraMazeSolver {
 		int route[EXTRA_MAZE_SOLVER_SIZE_Y*EXTRA_MAZE_SOLVER_SIZE_X][2]; // [n][x,y]
 		int route_size; // общий размер пути
 		int route_run; // на каком моменте мы от этого пути
-    int count_visited_cell;
+    	int count_visited_cell;
 		// ======================= NAVIGATOR ===========================================================
 		void dijkstra() { 
 			// обнулим дороги
@@ -378,12 +383,12 @@ class ExtraMazeSolver {
 				ExtraMazeSolver::route[dist][1] = my_y;
 			}
 			// выведем путь
-			for (int i=0; i<ExtraMazeSolver::route_size; i++) {
-				debugPrint(to_string(ExtraMazeSolver::route[i][0]),0);
-				debugPrint(" ",0);
-				debugPrint(to_string(ExtraMazeSolver::route[i][1]),0);
-				debugPrint();
-			}
+			// for (int i=0; i<ExtraMazeSolver::route_size; i++) {
+			// 	debugPrint(to_string(ExtraMazeSolver::route[i][0]),0);
+			// 	debugPrint(" ",0);
+			// 	debugPrint(to_string(ExtraMazeSolver::route[i][1]),0);
+			// 	debugPrint();
+			// }
 		}
 		int dijkstraToCoordinate() {
 			int a = ExtraMazeSolver::dijkstraToCoordinateAAA();
@@ -437,6 +442,7 @@ class ExtraMazeSolver {
 					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_LEFT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_LEFT; 
 					if (ExtraMazeSolver::dir==EXTRA_MAZE_SOLVER_DIR_RIGHT) return EXTRA_MAZE_SOLVER_NEXT_MOVE_FORWARD;
 			}
+			return EXTRA_MAZE_SOLVER_NEXT_MOVE_NONE; // ну мало ли
 		}
 		int algorytmLeftArm() {
 			// если было запомнено предыдущее действие
@@ -513,6 +519,11 @@ class ExtraMazeSolver {
 			#else
 			Serial.print(s);
 			#endif
+		}
+		void debugPrintWithErrorMazeAnalyzing(bool up, bool down, bool left, bool right) {
+			ExtraMazeSolver::error_maze_analyzing = 1; // ЗАКОМЕНТИРОВАТЬ, ЕСЛИ ПЛЕВАТЬ НА ТОЧНОСТЬ ВЫПОЛНЕНИЯ
+			ExtraMazeSolver::debugPrint("ERRROR (maze analyzing): robot look (f,b,l,r): " + to_string(up) + to_string(down) + to_string(left) + to_string(right));
+			ExtraMazeSolver::print();
 		}
 };
 
