@@ -38,6 +38,7 @@ ExtraMazeSolver maze;
 
 void maze_test(bool up, bool down, bool left, bool right, bool skip_turn=1) {
 	maze.exploreCell(up,down,left,right); 
+	cout << "robot seen: f=" << up << " b=" << down << " l=" << left << " r=" << right << endl;
 	maze.print();
 	int a = maze.getNextMove();
 	cout << "next_move: ";
