@@ -11,11 +11,16 @@
   modify: March 2025
 */
 
+#pragma once
+
 /*
+
 	run commands:
 	g++ ExtraMazeSolver.cpp
 	./a.out
 */
+
+// #define DEBUGER_CPP
 
 #ifdef DEBUGER_CPP
 #include <iostream>
